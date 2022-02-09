@@ -80,3 +80,8 @@ code {
 .main{
   background-color: white;
 }
+
+.warning{
+  color: red;
+  font-weight: bold;
+}

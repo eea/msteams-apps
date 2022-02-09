@@ -2,7 +2,10 @@
     {
         "resource": "Microsoft Graph",
         "delegated": [
-            "User.Read"
+            "User.Read",
+            "User.ReadBasic.All",
+            "User.Read.All",
+            "Sites.ReadWrite.All"
         ],
         "application": []
     }
