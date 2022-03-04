@@ -8,6 +8,7 @@ import TermsOfUse from "./TermsOfUse";
 import Tab from "./Tab";
 import "./App.css";
 import TabConfig from "./TabConfig";
+import EditTab from "./EditTab";
 
 /**
  * The main app which handles the initialization and routing
@@ -28,6 +29,7 @@ export default function App() {
             <Route exact path="/privacy" component={Privacy} />
             <Route exact path="/termsofuse" component={TermsOfUse} />
             <Route exact path="/tab" component={Tab} />
+            <Route exact path="/edittab" component={EditTab} />
             <Route exact path="/config" component={TabConfig} />
           </>
         )}

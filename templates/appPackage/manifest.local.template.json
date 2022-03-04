@@ -15,12 +15,12 @@
         "outline": "resources/outline.png"
     },
     "name": {
-        "short": "EIONETTest-local-debug",
-        "full": "EIONETTest-local-debug"
+        "short": "EIONET User Management",
+        "full": "EIONET User Management"
     },
     "description": {
-        "short": "Short description of EIONETTest-local-debug",
-        "full": "Full description of EIONETTest-local-debug"
+        "short": "Short description",
+        "full": "Full description"
     },
     "accentColor": "#FFFFFF",
     "bots": [],
@@ -38,9 +38,18 @@
     "staticTabs": [
         {
             "entityId": "index",
-            "name": "Personal Tab",
+            "name": "Create user",
             "contentUrl": "{{{localSettings.frontend.tabEndpoint}}}/index.html#/tab",
             "websiteUrl": "{{{localSettings.frontend.tabEndpoint}}}/index.html#/tab",
+            "scopes": [
+                "personal"
+            ]
+        },
+        {
+            "entityId": "editTab",
+            "name": "Edit user",
+            "contentUrl": "{{{localSettings.frontend.tabEndpoint}}}/index.html#/edittab",
+            "websiteUrl": "{{{localSettings.frontend.tabEndpoint}}}/index.html#/edittab",
             "scopes": [
                 "personal"
             ]

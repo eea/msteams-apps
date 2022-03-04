@@ -38,9 +38,18 @@
     "staticTabs": [
         {
             "entityId": "index",
-            "name": "Personal Tab",
+            "name": "Create user",
             "contentUrl": "{{{state.fx-resource-frontend-hosting.endpoint}}}/index.html#/tab",
             "websiteUrl": "{{{state.fx-resource-frontend-hosting.endpoint}}}/index.html#/tab",
+            "scopes": [
+                "personal"
+            ]
+        },
+        {
+            "entityId": "editTab",
+            "name": "Edit user",
+            "contentUrl": "{{{state.fx-resource-frontend-hosting.endpoint}}}/index.html#/edittab",
+            "websiteUrl": "{{{state.fx-resource-frontend-hosting.endpoint}}}/index.html#/edittab",
             "scopes": [
                 "personal"
             ]

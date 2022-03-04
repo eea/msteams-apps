@@ -84,4 +84,11 @@ code {
 .warning{
   color: red;
   font-weight: bold;
+  padding: 0.35rem;
+}
+
+.success{
+  color: green;
+  font-weight: bold;
+  padding: 0.35rem;
 }

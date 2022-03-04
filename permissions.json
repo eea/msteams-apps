@@ -5,7 +5,12 @@
             "User.Read",
             "User.ReadBasic.All",
             "User.Read.All",
-            "Sites.ReadWrite.All"
+            "Sites.ReadWrite.All",
+            "Domain.ReadWrite.All",
+            "Directory.ReadWrite.All",
+            "TeamMember.ReadWrite.All",
+            "TeamSettings.ReadWrite.All",
+            "Contacts.ReadWrite"
         ],
         "application": []
     }
