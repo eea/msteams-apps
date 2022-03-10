@@ -13,6 +13,9 @@
     },
     "license": "MIT",
     "dependencies": {
-        "@fluentui/react-teams": "^6.0.0"
+        "@emotion/react": "^11.8.1",
+        "@emotion/styled": "^11.8.1",
+        "@fluentui/react-teams": "^6.0.0",
+        "@mui/material": "^5.5.0"
     }
 }

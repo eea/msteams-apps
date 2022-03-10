@@ -30,33 +30,20 @@ export async function getMe() {
     return profile;
 }
 
-var domain = undefined;
-async function getDomain() {
-    if (!domain) {
-        const graphClient = getGraphClient();
-        const domainValue = await graphClient.api("/domains").get();
-
-        domain = domainValue.value[0];
-    }
-
-    return domain;
-}
-
 export async function getUserByMail(email) {
     try {
         const graphClient = getGraphClient();
-        let domain = await getDomain();
-        let path = "/users/" + email.replace("@", "_") + "#EXT#@" + domain.id;
-        console.log(encodeURIComponent(path));
-        const profile = await graphClient.api(encodeURIComponent(path)).get();
-        return profile
+        let path = "/users/?$filter=mail eq '" + email + "'";
+        const profile = await graphClient.api(path).get();
+
+        if (profile.value && profile.value.length) {
+            return profile.value[0];
+        }
+        return undefined;
+
     }
     catch (err) {
-        if (err.statusCode === 404) {
-            return undefined;
-        } else {
-            console.log(err);
-        }
+        console.log(err);
     }
 }
 
@@ -66,14 +53,63 @@ const sharepointSiteId = "7lcpdm.sharepoint.com,bf9359de-0f13-4b00-8b5a-114f6ef3
     userListId = "8880f574-2ee6-4e22-8f5a-40ceb768f045",
     organisationListId = "e7ccdaa9-443c-44bc-966a-e2d8526043d5";
 
-export async function getOrganisationList() {
+var genderList = [
+    { id: "Male", label: "Mr." }, { id: "Female", label: "Ms." }
+];
+export async function getInvitedUsers() {
     try {
         const graphClient = getGraphClient();
-        const response = await graphClient.api("/sites/" + sharepointSiteId + "/lists/" + organisationListId + "/items?$expand=fields").get();
+        const response = await graphClient.api("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items?$expand=fields").get();
+        const organisations = await getOrganisationList();
 
-        return response.value.map(function (organisation) {
-            return organisation.fields.Title;
+        return response.value.map(function (user) {
+            return {
+                Title: user.fields.Title,
+                Email: user.fields.Email,
+                Membership: user.fields.Membership,
+                Country: user.fields.Country,
+                OrganisationLookupId: user.fields.OrganisationLookupId,
+                Organisation: organisations.find((o) => o.content === user.fields.OrganisationLookupId).header,
+                Phone: user.fields.Phone,
+                ADUserId: user.fields.ADUserId,
+                Gender: user.fields.Gender,
+                GenderTitle: genderList.find((g) => g.id === user.fields.Gender).label,
+                id: user.fields.id,
+            };
         });
+    }
+    catch (err) {
+        console.log(err);
+    }
+}
+
+export async function getUser(userId) {
+    try {
+        const graphClient = getGraphClient();
+        const response = await graphClient.api("/users/" + userId).get();
+
+        return response;
+    }
+    catch (err) {
+        console.log(err);
+    }
+}
+
+var organisationListItems = undefined;
+export async function getOrganisationList() {
+    try {
+        if (!organisationListItems) {
+            const graphClient = getGraphClient();
+            const response = await graphClient.api("/sites/" + sharepointSiteId + "/lists/" + organisationListId + "/items?$expand=fields").get();
+
+            organisationListItems = response.value.map(function (organisation) {
+                return {
+                    header: organisation.fields.Title,
+                    content: organisation.id
+                };
+            });
+        }
+        return organisationListItems;
     }
     catch (err) {
         console.log(err);
@@ -108,7 +144,7 @@ export async function getComboLists() {
             columns = response.value;
         var genderColumn = columns.find(column => column.name === 'Gender');
         if (genderColumn) {
-            lists.genders = genderColumn.choice.choices;
+            lists.genders = genderList//genderColumn.choice.choices;
         }
         var countryColumn = columns.find(column => column.name === 'Country');
         if (countryColumn) {
@@ -133,31 +169,108 @@ export async function getComboLists() {
 export async function sendInvitation(user, mappings) {
     try {
         const graphClient = getGraphClient();
+        const firstMapping = mappings.find(m => user.Membership.includes(m.Membership));
+        let userId = undefined,
+            invitationResponse = undefined;
 
-        mappings.filter(m => user.fields.Membership.includes(m.Membership)).forEach(async (mapping) => {
-            let invitationResponse = await graphClient.api("/invitations/")
+        try {
+            invitationResponse = await graphClient.api("/invitations/")
                 .header('Content-Type', 'application/json')
                 .post({
-                    invitedUserEmailAddress: user.fields.Email,
-                    invitedUserDisplayName: user.fields.Title,
-                    inviteRedirectUrl: mapping.TeamURL,
+                    invitedUserEmailAddress: user.Email,
+                    invitedUserDisplayName: user.FirstName + ' ' + user.LastName,
+                    inviteRedirectUrl: firstMapping.TeamURL,
                     sendInvitationMessage: true,
                     invitedUserMessageInfo: {
                         customizedMessageBody: "The European Environment Agency invites you to to join the Eionet space in Microsoft Teams. Click on the link to accept the invitation and follow the instructions to sign-in that you received in another email from the EEA. We would like to ask you to complete the registration and sign in to the new platform by 24 January latest."
                     }
                 });
+            if (invitationResponse && invitationResponse.invitedUser) {
+                userId = invitationResponse.invitedUser.id;
+                //Save contact information
+                await graphClient.api("/users/" + userId)
+                    .header('Content-Type', 'application/json')
+                    .patch({
+                        givenName: user.FirstName,
+                        surname: user.LastName,
+                        displayName: user.FirstName + ' ' + user.LastName + ' (' + user.Country + ')',
+                        department: 'Eionet'
+                    });
+            }
+        } catch (err) {
+            console.log(err);
+        }
+        if (userId) {
+            mappings.filter(m => user.Membership.includes(m.Membership)).forEach(async (mapping) => {
 
-            if (invitationResponse.invitedUser) {
-                let userId = invitationResponse.invitedUser.id;
+                try {
+                    //Set groups and tags
+                    setTimeout(await graphClient.api("/groups/" + mapping.O365GroupId + "/members/$ref")
+                        .header('Content-Type', 'application/json')
+                        .post({
+                            "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + userId
+                        }), 50);
+
+                    if (mapping.Tag) {
+                        //TeamId is the same as O365GroupId
+                        await graphClient.api("/teams/" + mapping.O365GroupId + "/tags")
+                            .header('Content-Type', 'application/json')
+                            .post({
+                                displayName: mapping.Tag,
+                                members: [
+                                    {
+                                        userId: userId
+                                    }
+                                ]
+                            });
+                    }
+                }
+                catch (err) {
+                    console.log(err);
+                }
+            });
+
+            //Save to Sharepoint list
+            await graphClient.api("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items")
+                .header('Content-Type', 'application/json')
+                .post({
+                    fields: {
+                        Phone: user.Phone,
+                        Email: user.Email,
+                        Country: user.Country,
+                        "Membership@odata.type": "Collection(Edm.String)",
+                        Membership: user.Membership,
+                        Title: user.FirstName + ' ' + user.LastName,
+                        Gender: user.Gender,
+                        Organisation: user.Organisation,
+                        OrganisationLookupId: user.OrganisationLookupId,
+                        ADUserId: userId
+                    }
+                });
+        }
+
+        return true;
+
+    }
+    catch (err) {
+        console.log(err);
+        return false;
+    }
+}
+
+export async function editUser(user, mappings, oldMembership) {
+    try {
+        const graphClient = getGraphClient();
+        mappings.filter(m => user.Membership.includes(m.Membership) && !oldMembership.includes(m.Membership)).forEach(async (mapping) => {
+            try {
+                //Set groups and tags
                 setTimeout(await graphClient.api("/groups/" + mapping.O365GroupId + "/members/$ref")
                     .header('Content-Type', 'application/json')
                     .post({
-                        "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + userId
+                        "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + user.ADUserId
                     }), 50);
 
-                //Issues with permissions
-
-                try {
+                if (mapping.Tag) {
                     //TeamId is the same as O365GroupId
                     await graphClient.api("/teams/" + mapping.O365GroupId + "/tags")
                         .header('Content-Type', 'application/json')
@@ -165,31 +278,73 @@ export async function sendInvitation(user, mappings) {
                             displayName: mapping.Tag,
                             members: [
                                 {
-                                    userId: userId
+                                    userId: user.ADUserId
                                 }
                             ]
                         });
                 }
-                catch (err) {
-                    console.log(err);
-                }
             }
-
+            catch (err) {
+                console.log(err);
+            }
         });
 
-        //TODO comment after fixing membership saving
-        delete user.fields.Membership;
+        mappings.filter(m => !user.Membership.includes(m.Membership) && oldMembership.includes(m.Membership)).forEach(async (mapping) => {
+            try {
+                //Remove from group
+                await graphClient.api("/groups/" + mapping.O365GroupId + "/members/" + user.ADUserId + "/$ref")
+                    .header('Content-Type', 'application/json')
+                    .delete();
 
-        await graphClient.api("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items")
+                /*if (mapping.Tag) {
+                    //TeamId is the same as O365GroupId
+                    await graphClient.api("/teams/" + mapping.O365GroupId + "/tags")
+                        .header('Content-Type', 'application/json')
+                        .post({
+                            displayName: mapping.Tag,
+                            members: [
+                                {
+                                    userId: user.ADUserId
+                                }
+                            ]
+                        });
+                }*/
+            }
+            catch (err) {
+                console.log(err);
+            }
+        });
+
+        //Save user
+        await graphClient.api("/users/" + user.ADUserId)
             .header('Content-Type', 'application/json')
-            .post(user);
+            .patch({
+                givenName: user.FirstName,
+                surname: user.LastName,
+                displayName: user.FirstName + ' ' + user.LastName + '(' + user.Country + ')',
+            });
 
+        //Save to Sharepoint list
+        await graphClient.api("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items/" + user.id)
+            .header('Content-Type', 'application/json')
+            .patch({
+                fields: {
+                    Phone: user.Phone,
+                    Email: user.Email,
+                    Country: user.Country,
+                    "Membership@odata.type": "Collection(Edm.String)",
+                    Membership: user.Membership,
+                    Title: user.FirstName + ' ' + user.LastName,
+                    Gender: user.Gender,
+                    OrganisationLookupId: user.OrganisationLookupId
+                }
+            });
 
         return true;
-
     }
     catch (err) {
         console.log(err);
+        return false;
     }
 }
 

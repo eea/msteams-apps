@@ -1,8 +1,42 @@
 {
     "solution": {
-        "teamsAppTenantId": "3433ca34-11c7-462b-96a9-fd70adcc5bb0"
+        "teamsAppTenantId": "3433ca34-11c7-462b-96a9-fd70adcc5bb0",
+        "subscriptionId": "83d442da-e921-445b-aa62-df8d53543040",
+        "subscriptionName": "Azure subscription 1",
+        "tenantId": "3433ca34-11c7-462b-96a9-fd70adcc5bb0",
+        "needCreateResourceGroup": false,
+        "resourceGroupName": "ResourceGroup",
+        "location": "westeurope",
+        "resourceNameSuffix": "b3a430",
+        "provisionSucceeded": true
     },
     "fx-resource-appstudio": {
-        "tenantId": "3433ca34-11c7-462b-96a9-fd70adcc5bb0"
+        "tenantId": "3433ca34-11c7-462b-96a9-fd70adcc5bb0",
+        "teamsAppId": "ed571fa2-c288-4015-8af6-27f992a2f05b",
+        "teamsAppUpdatedAt": 1646908683351
+    },
+    "fx-resource-identity": {
+        "identityName": "eionettestdev709099",
+        "identityResourceId": "/subscriptions/83d442da-e921-445b-aa62-df8d53543040/resourceGroups/ResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/eionettestdev709099",
+        "identityClientId": "209e8238-eba5-429d-978c-67fc0c24adb0"
+    },
+    "fx-resource-aad-app-for-teams": {
+        "clientId": "22faa6b7-327c-420d-ac28-f38950ded4aa",
+        "clientSecret": "{{fx-resource-aad-app-for-teams.clientSecret}}",
+        "objectId": "efcf265d-4b6c-42fd-8a4c-068a3f06767a",
+        "oauth2PermissionScopeId": "7b72db19-15cd-43f1-a964-d96093d6d0dd",
+        "tenantId": "3433ca34-11c7-462b-96a9-fd70adcc5bb0",
+        "oauthHost": "https://login.microsoftonline.com",
+        "oauthAuthority": "https://login.microsoftonline.com/3433ca34-11c7-462b-96a9-fd70adcc5bb0",
+        "applicationIdUris": "api://eionettestdev709099tab.z6.web.core.windows.net/22faa6b7-327c-420d-ac28-f38950ded4aa"
+    },
+    "fx-resource-simple-auth": {
+        "endpoint": "https://eionettestdev709099simpleauth.azurewebsites.net",
+        "webAppResourceId": "/subscriptions/83d442da-e921-445b-aa62-df8d53543040/resourceGroups/ResourceGroup/providers/Microsoft.Web/sites/eionettestdev709099simpleAuth"
+    },
+    "fx-resource-frontend-hosting": {
+        "domain": "eionettestdev709099tab.z6.web.core.windows.net",
+        "endpoint": "https://eionettestdev709099tab.z6.web.core.windows.net",
+        "storageResourceId": "/subscriptions/83d442da-e921-445b-aa62-df8d53543040/resourceGroups/ResourceGroup/providers/Microsoft.Storage/storageAccounts/eionettestdev709099tab"
     }
 }
