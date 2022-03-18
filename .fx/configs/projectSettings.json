@@ -3,9 +3,11 @@
     "projectId": "d158b86f-f64a-40dc-94ee-8a05c20f4f36",
     "solutionSettings": {
         "name": "fx-solution-azure",
-        "version": "1.0.1",
+        "version": "1.0.4",
         "hostType": "Azure",
-        "azureResources": [],
+        "azureResources": [
+            "function"
+        ],
         "capabilities": [
             "Tab"
         ],
@@ -13,6 +15,7 @@
             "fx-resource-frontend-hosting",
             "fx-resource-identity",
             "fx-resource-aad-app-for-teams",
+            "fx-resource-function",
             "fx-resource-local-debug",
             "fx-resource-appstudio",
             "fx-resource-simple-auth"
@@ -20,5 +23,6 @@
     },
     "version": "2.0.0",
     "isFromSample": false,
-    "programmingLanguage": "javascript"
+    "programmingLanguage": "javascript",
+    "defaultFunctionName": "getGraphData"
 }

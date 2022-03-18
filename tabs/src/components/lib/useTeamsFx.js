@@ -1,4 +1,4 @@
-import { loadConfiguration, ResourceType, LogLevel, setLogLevel, setLogFunction } from "@microsoft/teamsfx";
+import { loadConfiguration, ResourceType, LogLevel, setLogLevel, setLogFunction, TeamsUserCredential } from "@microsoft/teamsfx";
 import { useData } from "./useData";
 import { useTeams } from "msteams-react-base-component";
 
@@ -34,7 +34,11 @@ export function useTeamsFx() {
           },
         ],
       });
+
       initialized = true;
+      const credential = new TeamsUserCredential();
+      // Get the user info from access token
+      await credential.getUserInfo();
     }
   });
   const isInTeams = true;

@@ -1,7 +1,7 @@
 import { React, useState, useEffect, useRef } from "react";
 import { getComboLists, getOrganisationList, getMappingsList, getMe, editUser } from "../data/provider";
 import "./UserEdit.css";
-import { Box, TextField, Tooltip, Autocomplete, Button, FormLabel, CircularProgress } from "@mui/material";
+import { Box, TextField, Tooltip, Autocomplete, Button, FormLabel, CircularProgress, Checkbox } from "@mui/material";
 
 export function UserEdit({ user, refreshRow, saveFunction, newYN }) {
     const [loading, setLoading] = useState(false),

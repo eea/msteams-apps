@@ -2,16 +2,15 @@
     {
         "resource": "Microsoft Graph",
         "delegated": [
-            "User.Read",
-            "User.ReadBasic.All",
+            "User.Read"
+        ],
+        "application": [
             "User.Read.All",
             "Sites.ReadWrite.All",
             "Domain.ReadWrite.All",
             "Directory.ReadWrite.All",
             "TeamMember.ReadWrite.All",
-            "TeamSettings.ReadWrite.All",
-            "Contacts.ReadWrite"
-        ],
-        "application": []
+            "TeamSettings.ReadWrite.All"
+        ]
     }
 ]

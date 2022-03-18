@@ -5,6 +5,7 @@ import validator from "validator";
 import "./UserInvite.css";
 import { UserEdit } from "./UserEdit";
 import { FormLabel } from "@mui/material";
+import { TeamsUserCredential } from "@microsoft/teamsfx";
 
 export function UserInvite(props) {
     const [inputEmail, setInputEmail] = useState("");
@@ -32,6 +33,7 @@ export function UserInvite(props) {
 
     useEffect(() => {
         (async () => {
+
             let myProfile = await getMe();
             setMe(myProfile);
             if (myProfile.NFP) {

@@ -42,3 +42,17 @@ output simpleAuthOutput object = {
   endpoint: simpleAuthProvision.outputs.endpoint
   webAppResourceId: simpleAuthProvision.outputs.webAppResourceId
 }
+// Resources for Azure Functions
+module functionProvision './provision/function.bicep' = {
+  name: 'functionProvision'
+  params: {
+    provisionParameters: provisionParameters
+    userAssignedIdentityId: userAssignedIdentityProvision.outputs.identityResourceId
+  }
+}
+
+output functionOutput object = {
+  teamsFxPluginId: 'fx-resource-function'
+  functionAppResourceId: functionProvision.outputs.functionAppResourceId
+  functionEndpoint: functionProvision.outputs.functionEndpoint
+}

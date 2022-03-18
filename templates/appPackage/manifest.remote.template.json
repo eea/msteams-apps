@@ -1,7 +1,7 @@
 {
     "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.11/MicrosoftTeams.schema.json",
     "manifestVersion": "1.11",
-    "version": "1.0.1",
+    "version": "1.0.5",
     "id": "{{state.fx-resource-appstudio.teamsAppId}}",
     "packageName": "com.microsoft.teams.extension",
     "developer": {
@@ -47,7 +47,7 @@
         },
         {
             "entityId": "editTab",
-            "name": "Edit user",
+            "name": "Manage users",
             "contentUrl": "{{{state.fx-resource-frontend-hosting.endpoint}}}/index.html#/edittab",
             "websiteUrl": "{{{state.fx-resource-frontend-hosting.endpoint}}}/index.html#/edittab",
             "scopes": [

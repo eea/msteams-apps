@@ -21,7 +21,7 @@ class TabConfig extends React.Component {
           urlSuffix: "tab",
         },
         {
-          suggestedDisplayName: "Edit user",
+          suggestedDisplayName: "Manage users",
           entityId: "EditUser",
           urlSuffix: "edittab",
 

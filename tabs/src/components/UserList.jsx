@@ -75,7 +75,9 @@ export function UserList(props) {
                 <TextField id="search" label="Search" variant="standard" className="search-box" onChange={event => {
                     const { value } = event.target;
                     setTimeout(setFilteredUsers(users.filter(u => {
-                        return !value || u.Email.toLowerCase().includes(value.toLowerCase());
+                        return !value || u.Email.toLowerCase().includes(value.toLowerCase())
+                            || (u.Title && u.Title.toLowerCase().includes(value.toLowerCase()))
+                            || (u.Membership && u.Membership.some((m) => m.toLowerCase().includes(value.toLowerCase())));
                     })), 50);
                 }} />
             </div>

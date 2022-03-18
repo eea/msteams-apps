@@ -1,22 +1,8 @@
-import { TeamsUserCredential, createMicrosoftGraphClient } from '@microsoft/teamsfx';
-//import sharepointConfig from 'sharepointConfig.json';
-
-var graphClient = undefined;
-function getGraphClient() {
-    if (!graphClient) {
-        const credential = new TeamsUserCredential(),
-            client = createMicrosoftGraphClient(credential, ["User.Read", "User.Read.All", "User.ReadBasic.All", "Sites.ReadWrite.All", "Domain.ReadWrite.All", "Directory.ReadWrite.All", "TeamMember.ReadWrite.All", "TeamSettings.ReadWrite.All", "Contacts.ReadWrite"]);
-
-        client.config.defaultVersion = 'beta';
-        graphClient = client;
-    }
-
-    return graphClient;
-}
+import { apiGet, apiPost, apiPatch, apiDelete } from './apiProvider';
 
 export async function getMe() {
-    const graphClient = getGraphClient();
-    const profile = await graphClient.api("me?$select=id,displayName,mail,mobilePhone&$expand=extensions").get();
+    const response = await apiGet("me?$select=id,displayName,mail,mobilePhone&$expand=extensions", "user");
+    const profile = response.graphClientMessage;
     if (profile.extensions) {
         let eionetExtension = profile.extensions.find((extension) => { return extension.id === "com.eionet.nfp"; });
         if (eionetExtension) {
@@ -32,10 +18,8 @@ export async function getMe() {
 
 export async function getUserByMail(email) {
     try {
-        const graphClient = getGraphClient();
-        let path = "/users/?$filter=mail eq '" + email + "'";
-        const profile = await graphClient.api(path).get();
-
+        const response = await apiGet("/users/?$filter=mail eq '" + email + "'");
+        const profile = response.graphClientMessage;
         if (profile.value && profile.value.length) {
             return profile.value[0];
         }
@@ -58,11 +42,11 @@ var genderList = [
 ];
 export async function getInvitedUsers() {
     try {
-        const graphClient = getGraphClient();
-        const response = await graphClient.api("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items?$expand=fields").get();
+        const response = await apiGet("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items?$expand=fields");
+        const users = await response.graphClientMessage;
         const organisations = await getOrganisationList();
 
-        return response.value.map(function (user) {
+        return users.value.map(function (user) {
             return {
                 Title: user.fields.Title,
                 Email: user.fields.Email,
@@ -85,10 +69,8 @@ export async function getInvitedUsers() {
 
 export async function getUser(userId) {
     try {
-        const graphClient = getGraphClient();
-        const response = await graphClient.api("/users/" + userId).get();
-
-        return response;
+        const response = await apiGet("/users/" + userId);
+        return response.graphClientMessage;
     }
     catch (err) {
         console.log(err);
@@ -99,10 +81,8 @@ var organisationListItems = undefined;
 export async function getOrganisationList() {
     try {
         if (!organisationListItems) {
-            const graphClient = getGraphClient();
-            const response = await graphClient.api("/sites/" + sharepointSiteId + "/lists/" + organisationListId + "/items?$expand=fields").get();
-
-            organisationListItems = response.value.map(function (organisation) {
+            const response = await apiGet("/sites/" + sharepointSiteId + "/lists/" + organisationListId + "/items?$expand=fields");
+            organisationListItems = response.graphClientMessage.value.map(function (organisation) {
                 return {
                     header: organisation.fields.Title,
                     content: organisation.id
@@ -118,10 +98,8 @@ export async function getOrganisationList() {
 
 export async function getMappingsList() {
     try {
-        const graphClient = getGraphClient();
-        const response = await graphClient.api("/sites/" + sharepointSiteId + "/lists/" + mappingsListId + "/items?$expand=fields").get();
-
-        return response.value.map(function (config) {
+        const response = await apiGet("/sites/" + sharepointSiteId + "/lists/" + mappingsListId + "/items?$expand=fields");
+        return response.graphClientMessage.value.map(function (config) {
             return {
                 TeamURL: config.fields.TeamURL,
                 O365Group: config.fields.O365group,
@@ -139,23 +117,22 @@ export async function getMappingsList() {
 export async function getComboLists() {
     let lists = {};
     try {
-        const graphClient = getGraphClient();
-        const response = await graphClient.api("/sites/" + sharepointSiteId + "/lists/" + userListId + "/columns").get(),
-            columns = response.value;
+        const response = await apiGet("/sites/" + sharepointSiteId + "/lists/" + userListId + "/columns");
+        const columns = response.graphClientMessage.value;
         var genderColumn = columns.find(column => column.name === 'Gender');
-        if (genderColumn) {
+        if (genderColumn && genderColumn.choice) {
             lists.genders = genderList//genderColumn.choice.choices;
         }
         var countryColumn = columns.find(column => column.name === 'Country');
-        if (countryColumn) {
+        if (countryColumn && countryColumn.choice) {
             lists.countries = countryColumn.choice.choices;
         }
         var membershipColumn = columns.find(column => column.name === 'Membership');
-        if (membershipColumn) {
+        if (membershipColumn && membershipColumn.choice) {
             lists.memberships = membershipColumn.choice.choices;
         }
         var nfpColumn = columns.find(column => column.name === 'NFP');
-        if (nfpColumn) {
+        if (nfpColumn && nfpColumn.choice) {
             lists.nfp = nfpColumn.choice.choices;
         }
 
@@ -168,15 +145,13 @@ export async function getComboLists() {
 
 export async function sendInvitation(user, mappings) {
     try {
-        const graphClient = getGraphClient();
         const firstMapping = mappings.find(m => user.Membership.includes(m.Membership));
         let userId = undefined,
             invitationResponse = undefined;
 
         try {
-            invitationResponse = await graphClient.api("/invitations/")
-                .header('Content-Type', 'application/json')
-                .post({
+            invitationResponse = await apiPost("/invitations/",
+                {
                     invitedUserEmailAddress: user.Email,
                     invitedUserDisplayName: user.FirstName + ' ' + user.LastName,
                     inviteRedirectUrl: firstMapping.TeamURL,
@@ -185,37 +160,34 @@ export async function sendInvitation(user, mappings) {
                         customizedMessageBody: "The European Environment Agency invites you to to join the Eionet space in Microsoft Teams. Click on the link to accept the invitation and follow the instructions to sign-in that you received in another email from the EEA. We would like to ask you to complete the registration and sign in to the new platform by 24 January latest."
                     }
                 });
-            if (invitationResponse && invitationResponse.invitedUser) {
+
+            if (invitationResponse && invitationResponse.graphClientMessage.invitedUser) {
                 userId = invitationResponse.invitedUser.id;
                 //Save contact information
-                await graphClient.api("/users/" + userId)
-                    .header('Content-Type', 'application/json')
-                    .patch({
-                        givenName: user.FirstName,
-                        surname: user.LastName,
-                        displayName: user.FirstName + ' ' + user.LastName + ' (' + user.Country + ')',
-                        department: 'Eionet'
-                    });
+                await apiPatch("/users/" + userId, {
+                    givenName: user.FirstName,
+                    surname: user.LastName,
+                    displayName: user.FirstName + ' ' + user.LastName + ' (' + user.Country + ')',
+                    department: 'Eionet'
+
+                });
             }
         } catch (err) {
             console.log(err);
         }
         if (userId) {
             mappings.filter(m => user.Membership.includes(m.Membership)).forEach(async (mapping) => {
-
                 try {
                     //Set groups and tags
-                    setTimeout(await graphClient.api("/groups/" + mapping.O365GroupId + "/members/$ref")
-                        .header('Content-Type', 'application/json')
-                        .post({
+                    setTimeout(await apiPost("/groups/" + mapping.O365GroupId + "/members/$ref",
+                        {
                             "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + userId
                         }), 50);
 
                     if (mapping.Tag) {
                         //TeamId is the same as O365GroupId
-                        await graphClient.api("/teams/" + mapping.O365GroupId + "/tags")
-                            .header('Content-Type', 'application/json')
-                            .post({
+                        await apiPost("/teams/" + mapping.O365GroupId + "/tags",
+                            {
                                 displayName: mapping.Tag,
                                 members: [
                                     {
@@ -231,9 +203,8 @@ export async function sendInvitation(user, mappings) {
             });
 
             //Save to Sharepoint list
-            await graphClient.api("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items")
-                .header('Content-Type', 'application/json')
-                .post({
+            await apiPost("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items",
+                {
                     fields: {
                         Phone: user.Phone,
                         Email: user.Email,
@@ -260,21 +231,18 @@ export async function sendInvitation(user, mappings) {
 
 export async function editUser(user, mappings, oldMembership) {
     try {
-        const graphClient = getGraphClient();
         mappings.filter(m => user.Membership.includes(m.Membership) && !oldMembership.includes(m.Membership)).forEach(async (mapping) => {
             try {
                 //Set groups and tags
-                setTimeout(await graphClient.api("/groups/" + mapping.O365GroupId + "/members/$ref")
-                    .header('Content-Type', 'application/json')
-                    .post({
+                setTimeout(await apiPost("/groups/" + mapping.O365GroupId + "/members/$ref",
+                    {
                         "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + user.ADUserId
                     }), 50);
 
                 if (mapping.Tag) {
                     //TeamId is the same as O365GroupId
-                    await graphClient.api("/teams/" + mapping.O365GroupId + "/tags")
-                        .header('Content-Type', 'application/json')
-                        .post({
+                    await apiPost("/teams/" + mapping.O365GroupId + "/tags",
+                        {
                             displayName: mapping.Tag,
                             members: [
                                 {
@@ -292,9 +260,7 @@ export async function editUser(user, mappings, oldMembership) {
         mappings.filter(m => !user.Membership.includes(m.Membership) && oldMembership.includes(m.Membership)).forEach(async (mapping) => {
             try {
                 //Remove from group
-                await graphClient.api("/groups/" + mapping.O365GroupId + "/members/" + user.ADUserId + "/$ref")
-                    .header('Content-Type', 'application/json')
-                    .delete();
+                setTimeout(await apiDelete("/groups/" + mapping.O365GroupId + "/members/" + user.ADUserId + "/$ref"), 50);
 
                 /*if (mapping.Tag) {
                     //TeamId is the same as O365GroupId
@@ -316,18 +282,16 @@ export async function editUser(user, mappings, oldMembership) {
         });
 
         //Save user
-        await graphClient.api("/users/" + user.ADUserId)
-            .header('Content-Type', 'application/json')
-            .patch({
+        await apiPatch("/users/" + user.ADUserId,
+            {
                 givenName: user.FirstName,
                 surname: user.LastName,
                 displayName: user.FirstName + ' ' + user.LastName + '(' + user.Country + ')',
             });
 
         //Save to Sharepoint list
-        await graphClient.api("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items/" + user.id)
-            .header('Content-Type', 'application/json')
-            .patch({
+        await apiPatch("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items/" + user.id,
+            {
                 fields: {
                     Phone: user.Phone,
                     Email: user.Email,
