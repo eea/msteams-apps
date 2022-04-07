@@ -1,69 +1,39 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from './apiProvider';
+import { getConfiguration, getSPUserByMail } from './sharepointProvider';
 
 export async function getMe() {
-    const response = await apiGet("me?$select=id,displayName,mail,mobilePhone&$expand=extensions", "user");
+    const config = await getConfiguration(),
+        response = await apiGet("me?$select=id,displayName,mail,mobilePhone,country", "user"),
+        groups = await apiGet("me/memberOf", "user");
+
     const profile = response.graphClientMessage;
-    if (profile.extensions) {
-        let eionetExtension = profile.extensions.find((extension) => { return extension.id === "com.eionet.nfp"; });
-        if (eionetExtension) {
-            profile.NFP = eionetExtension.nfp === 'true';
-            if (eionetExtension.country) { profile.Country = eionetExtension.country; }
-        }
-        else {
-            profile.NFP = false;
-        }
+    if (groups.graphClientMessage) {
+        let groupsList = groups.graphClientMessage.value;
+
+        profile.isAdmin = groupsList.some(group => { return group.id === config.AdminGroupId });
+        profile.isNFP = !profile.isAdmin && groupsList.some(group => { return group.id === config.NFPGroupId });
+        profile.isGuest = !profile.isAdmin && !profile.isNFP;
     }
     return profile;
 }
 
 export async function getUserByMail(email) {
     try {
-        const response = await apiGet("/users/?$filter=mail eq '" + email + "'");
-        const profile = response.graphClientMessage;
-        if (profile.value && profile.value.length) {
-            return profile.value[0];
+        const adResponse = await apiGet("/users/?$filter=mail eq '" + email + "'"),
+            spUser = await getSPUserByMail(email),
+            adMessage = adResponse.graphClientMessage;
+
+        const adUser = adMessage.value && adMessage.value.length ? adMessage.value[0] : undefined;
+
+        return {
+            ADUser: adUser,
+            SharepointUser: spUser,
+            Continue: (!adUser && !spUser) || (adUser && !spUser),
         }
+    }
+    catch (err) {
+        console.log(err);
         return undefined;
-
-    }
-    catch (err) {
-        console.log(err);
-    }
-}
-
-//TODO: move to configuration
-const sharepointSiteId = "7lcpdm.sharepoint.com,bf9359de-0f13-4b00-8b5a-114f6ef3bfb0,6609a994-5225-4a1d-bd05-a239c7b45f72",
-    mappingsListId = "651ffab6-a4cd-4a77-8f2e-8723ff79e515",
-    userListId = "8880f574-2ee6-4e22-8f5a-40ceb768f045",
-    organisationListId = "e7ccdaa9-443c-44bc-966a-e2d8526043d5";
-
-var genderList = [
-    { id: "Male", label: "Mr." }, { id: "Female", label: "Ms." }
-];
-export async function getInvitedUsers() {
-    try {
-        const response = await apiGet("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items?$expand=fields");
-        const users = await response.graphClientMessage;
-        const organisations = await getOrganisationList();
-
-        return users.value.map(function (user) {
-            return {
-                Title: user.fields.Title,
-                Email: user.fields.Email,
-                Membership: user.fields.Membership,
-                Country: user.fields.Country,
-                OrganisationLookupId: user.fields.OrganisationLookupId,
-                Organisation: organisations.find((o) => o.content === user.fields.OrganisationLookupId).header,
-                Phone: user.fields.Phone,
-                ADUserId: user.fields.ADUserId,
-                Gender: user.fields.Gender,
-                GenderTitle: genderList.find((g) => g.id === user.fields.Gender).label,
-                id: user.fields.id,
-            };
-        });
-    }
-    catch (err) {
-        console.log(err);
     }
 }
 
@@ -77,147 +47,180 @@ export async function getUser(userId) {
     }
 }
 
-var organisationListItems = undefined;
-export async function getOrganisationList() {
-    try {
-        if (!organisationListItems) {
-            const response = await apiGet("/sites/" + sharepointSiteId + "/lists/" + organisationListId + "/items?$expand=fields");
-            organisationListItems = response.graphClientMessage.value.map(function (organisation) {
-                return {
-                    header: organisation.fields.Title,
-                    content: organisation.id
-                };
+async function addTag(teamId, name, userId) {
+    var response = await apiGet("/teams/" + teamId + "/tags?$filter=displayName eq '" + name + "'");
+
+    if (response.graphClientMessage.value && response.graphClientMessage.value.length) {
+        let existingTag = response.graphClientMessage.value[0],
+            tagMemberIdResponse = await apiGet("/teams/" + teamId + "/tags/" + existingTag.id + "/members?$filter=userId eq '" + userId + "'");
+
+        if (!tagMemberIdResponse.graphClientMessage.value || !tagMemberIdResponse.graphClientMessage.value.length) {
+            await apiPost("/teams/" + teamId + "/tags/" + existingTag.id + "/members",
+                {
+                    userId: userId
+                });
+        }
+    } else {
+        await apiPost("/teams/" + teamId + "/tags",
+            {
+                displayName: name,
+                members: [
+                    {
+                        userId: userId
+                    }
+                ]
             });
-        }
-        return organisationListItems;
-    }
-    catch (err) {
-        console.log(err);
     }
 }
 
-export async function getMappingsList() {
-    try {
-        const response = await apiGet("/sites/" + sharepointSiteId + "/lists/" + mappingsListId + "/items?$expand=fields");
-        return response.graphClientMessage.value.map(function (config) {
-            return {
-                TeamURL: config.fields.TeamURL,
-                O365Group: config.fields.O365group,
-                O365GroupId: config.fields.O365GroupId,
-                Membership: config.fields.Membership,
-                Tag: config.fields.Tag
-            };
-        });
-    }
-    catch (err) {
-        console.log(err);
+async function removeTag(teamId, name, userId) {
+    const response = await apiGet("/teams/" + teamId + "/tags?$filter=displayName eq '" + name + "'");
+
+    if (response.graphClientMessage.value && response.graphClientMessage.value.length) {
+        let existingTag = response.graphClientMessage.value[0],
+            tagMemberIdResponse = await apiGet("/teams/" + teamId + "/tags/" + existingTag.id + "/members?$filter=userId eq '" + userId + "'");
+
+        if (tagMemberIdResponse.graphClientMessage.value && tagMemberIdResponse.graphClientMessage.value.length) {
+            let tagMemberId = tagMemberIdResponse.graphClientMessage.value[0].id;
+            await apiDelete("/teams/" + teamId + "/tags/" + existingTag.id + "/members/" + tagMemberId);
+        }
     }
 }
 
-export async function getComboLists() {
-    let lists = {};
-    try {
-        const response = await apiGet("/sites/" + sharepointSiteId + "/lists/" + userListId + "/columns");
-        const columns = response.graphClientMessage.value;
-        var genderColumn = columns.find(column => column.name === 'Gender');
-        if (genderColumn && genderColumn.choice) {
-            lists.genders = genderList//genderColumn.choice.choices;
-        }
-        var countryColumn = columns.find(column => column.name === 'Country');
-        if (countryColumn && countryColumn.choice) {
-            lists.countries = countryColumn.choice.choices;
-        }
-        var membershipColumn = columns.find(column => column.name === 'Membership');
-        if (membershipColumn && membershipColumn.choice) {
-            lists.memberships = membershipColumn.choice.choices;
-        }
-        var nfpColumn = columns.find(column => column.name === 'NFP');
-        if (nfpColumn && nfpColumn.choice) {
-            lists.nfp = nfpColumn.choice.choices;
-        }
+async function saveADUser(userId, userData) {
+    await apiPatch("/users/" + userId, {
+        givenName: userData.FirstName,
+        surname: userData.LastName,
+        displayName: userData.FirstName + ' ' + userData.LastName + ' (' + userData.Country + ')',
+        department: 'Eionet',
+        country: userData.Country
+    });
+}
 
-        return lists
-    }
-    catch (err) {
-        console.log(err);
+async function saveSPUser(userId, userData, newYN) {
+    const spConfig = await getConfiguration();
+    let fields =
+    {
+        fields: {
+            Phone: userData.Phone,
+            Email: userData.Email,
+            Country: userData.Country,
+            "Membership@odata.type": "Collection(Edm.String)",
+            Membership: userData.Membership,
+            Title: userData.FirstName + ' ' + userData.LastName,
+            Gender: userData.Gender,
+            Organisation: userData.Organisation,
+            OrganisationLookupId: userData.OrganisationLookupId,
+            ADUserId: userId,
+            NFP: userData.NFP
+        }
+    };
+    let graphURL = "/sites/" + spConfig.SharepointSiteId + "/lists/" + spConfig.UserListId + "/items";
+    if (newYN) {
+        await apiPost(graphURL, fields);
+    } else {
+        graphURL += "/" + userData.id;
+        await apiPatch(graphURL, fields);
     }
 }
 
 export async function sendInvitation(user, mappings) {
     try {
-        const firstMapping = mappings.find(m => user.Membership.includes(m.Membership));
+        const firstMapping = mappings.find(m => user.Membership.includes(m.Membership)),
+            config = await getConfiguration();
         let userId = undefined,
-            invitationResponse = undefined;
+            invitationResponse = undefined,
+            sendMail = false,
+            teamsURLs = "\n";
 
-        try {
-            invitationResponse = await apiPost("/invitations/",
-                {
-                    invitedUserEmailAddress: user.Email,
-                    invitedUserDisplayName: user.FirstName + ' ' + user.LastName,
-                    inviteRedirectUrl: firstMapping.TeamURL,
-                    sendInvitationMessage: true,
-                    invitedUserMessageInfo: {
-                        customizedMessageBody: "The European Environment Agency invites you to to join the Eionet space in Microsoft Teams. Click on the link to accept the invitation and follow the instructions to sign-in that you received in another email from the EEA. We would like to ask you to complete the registration and sign in to the new platform by 24 January latest."
-                    }
-                });
+        if (!user.ADProfile) {
+            try {
+                invitationResponse = await apiPost("/invitations/",
+                    {
+                        invitedUserEmailAddress: user.Email,
+                        invitedUserDisplayName: user.FirstName + ' ' + user.LastName,
+                        inviteRedirectUrl: firstMapping.TeamURL,
+                        sendInvitationMessage: true,
+                        invitedUserMessageInfo: {
+                            customizedMessageBody: config.InviteEmailText
+                        }
+                    });
 
-            if (invitationResponse && invitationResponse.graphClientMessage.invitedUser) {
-                userId = invitationResponse.invitedUser.id;
-                //Save contact information
-                await apiPatch("/users/" + userId, {
-                    givenName: user.FirstName,
-                    surname: user.LastName,
-                    displayName: user.FirstName + ' ' + user.LastName + ' (' + user.Country + ')',
-                    department: 'Eionet'
-
-                });
+                if (invitationResponse && invitationResponse.graphClientMessage.invitedUser) {
+                    userId = invitationResponse.graphClientMessage.invitedUser.id;
+                    await saveADUser(userId, user);
+                }
+            } catch (err) {
+                console.log(err);
+                return false;
             }
-        } catch (err) {
-            console.log(err);
+        } else {
+            userId = user.ADProfile.id;
+            sendMail = true;
         }
+
         if (userId) {
-            mappings.filter(m => user.Membership.includes(m.Membership)).forEach(async (mapping) => {
-                try {
-                    //Set groups and tags
-                    setTimeout(await apiPost("/groups/" + mapping.O365GroupId + "/members/$ref",
+            try {
+                //If NFP save to NFPs groups
+                if (user.NFP) {
+                    await apiPost("/groups/" + config.NFPGroupId + "/members/$ref",
                         {
                             "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + userId
-                        }), 50);
+                        });
+                }
 
+                let groupList = [];
+                mappings.filter(m => user.Membership.includes(m.Membership)).forEach(async (mapping) => {
+
+                    //Set groups and tags
+                    if (!groupList.includes(mapping.O365GroupId)) {
+                        teamsURLs = teamsURLs + mapping.TeamURL + "\n";
+                        groupList.push(mapping.O365GroupId);
+                        setTimeout(await apiPost("/groups/" + mapping.O365GroupId + "/members/$ref",
+                            {
+                                "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + userId
+                            }), 50);
+                    }
                     if (mapping.Tag) {
                         //TeamId is the same as O365GroupId
-                        await apiPost("/teams/" + mapping.O365GroupId + "/tags",
-                            {
-                                displayName: mapping.Tag,
-                                members: [
-                                    {
-                                        userId: userId
-                                    }
-                                ]
-                            });
+                        await addTag(mapping.O365GroupId, mapping.Tag, userId);
+                        await addTag(mapping.O365GroupId, user.Country, userId);
                     }
-                }
-                catch (err) {
-                    console.log(err);
-                }
-            });
 
-            //Save to Sharepoint list
-            await apiPost("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items",
-                {
-                    fields: {
-                        Phone: user.Phone,
-                        Email: user.Email,
-                        Country: user.Country,
-                        "Membership@odata.type": "Collection(Edm.String)",
-                        Membership: user.Membership,
-                        Title: user.FirstName + ' ' + user.LastName,
-                        Gender: user.Gender,
-                        Organisation: user.Organisation,
-                        OrganisationLookupId: user.OrganisationLookupId,
-                        ADUserId: userId
-                    }
                 });
+
+                if (sendMail) {
+                    try {
+                        await apiPost("me/sendMail",
+                            {
+                                message: {
+                                    subject: config.AddedToTeamsMailSubject,
+                                    body: {
+                                        contentType: "Text",
+                                        content: config.AddedToTeamsMailBody
+                                    },
+                                    toRecipients: [
+                                        {
+                                            emailAddress: {
+                                                address: user.Email
+                                            }
+                                        }
+                                    ]
+                                }
+                            }, "user");
+                    }
+                    catch (err) {
+                        console.log(err);
+                        return false;
+                    }
+                }
+            }
+            catch (err) {
+                console.log(err);
+                return false;
+            }
+
+            await saveSPUser(userId, user, true);
         }
 
         return true;
@@ -229,80 +232,67 @@ export async function sendInvitation(user, mappings) {
     }
 }
 
-export async function editUser(user, mappings, oldMembership) {
+export async function editUser(user, mappings, oldValues) {
     try {
-        mappings.filter(m => user.Membership.includes(m.Membership) && !oldMembership.includes(m.Membership)).forEach(async (mapping) => {
-            try {
-                //Set groups and tags
-                setTimeout(await apiPost("/groups/" + mapping.O365GroupId + "/members/$ref",
+        let newMappings = mappings.filter(m => user.Membership.includes(m.Membership)),
+            oldMappings = mappings.filter(m => oldValues.Membership.includes(m.Membership)),
+            newGroups = [...new Set(newMappings.map(m => m.O365GroupId))],
+            oldGroups = [...new Set(oldMappings.map(m => m.O365GroupId))],
+            newTags = [...new Set(newMappings.filter(m => m.Tag))],
+            oldTags = [...new Set(oldMappings.filter(m => m.Tag))],
+            config = await getConfiguration();
+
+        newGroups.forEach(async (groupId) => {
+            if (!oldGroups.includes(groupId)) {
+                setTimeout(await apiPost("/groups/" + groupId + "/members/$ref",
                     {
                         "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + user.ADUserId
                     }), 50);
 
-                if (mapping.Tag) {
-                    //TeamId is the same as O365GroupId
-                    await apiPost("/teams/" + mapping.O365GroupId + "/tags",
-                        {
-                            displayName: mapping.Tag,
-                            members: [
-                                {
-                                    userId: user.ADUserId
-                                }
-                            ]
-                        });
-                }
-            }
-            catch (err) {
-                console.log(err);
+                var groupMapping = mappings.filter(m => m.O365GroupId === groupId);
+                if (groupMapping[0].Tag)
+                    addTag(groupId, user.Country, user.ADUserId);
             }
         });
 
-        mappings.filter(m => !user.Membership.includes(m.Membership) && oldMembership.includes(m.Membership)).forEach(async (mapping) => {
-            try {
-                //Remove from group
-                setTimeout(await apiDelete("/groups/" + mapping.O365GroupId + "/members/" + user.ADUserId + "/$ref"), 50);
-
-                /*if (mapping.Tag) {
-                    //TeamId is the same as O365GroupId
-                    await graphClient.api("/teams/" + mapping.O365GroupId + "/tags")
-                        .header('Content-Type', 'application/json')
-                        .post({
-                            displayName: mapping.Tag,
-                            members: [
-                                {
-                                    userId: user.ADUserId
-                                }
-                            ]
-                        });
-                }*/
-            }
-            catch (err) {
-                console.log(err);
+        newTags.forEach(m => {
+            if (!oldTags.includes(m)) {
+                addTag(m.O365GroupId, m.Tag, user.ADUserId);
             }
         });
 
-        //Save user
-        await apiPatch("/users/" + user.ADUserId,
-            {
-                givenName: user.FirstName,
-                surname: user.LastName,
-                displayName: user.FirstName + ' ' + user.LastName + '(' + user.Country + ')',
-            });
+        oldTags.forEach(m => {
+            if (!newTags.includes(m)) {
+                removeTag(m.O365GroupId, m.Tag, user.ADUserId)
+            }
+        });
 
-        //Save to Sharepoint list
-        await apiPatch("/sites/" + sharepointSiteId + "/lists/" + userListId + "/items/" + user.id,
-            {
-                fields: {
-                    Phone: user.Phone,
-                    Email: user.Email,
-                    Country: user.Country,
-                    "Membership@odata.type": "Collection(Edm.String)",
-                    Membership: user.Membership,
-                    Title: user.FirstName + ' ' + user.LastName,
-                    Gender: user.Gender,
-                    OrganisationLookupId: user.OrganisationLookupId
+        oldGroups.forEach(async (groupId) => {
+            if (!newGroups.includes(groupId)) {
+                setTimeout(await apiDelete("/groups/" + groupId + "/members/" + user.ADUserId + "/$ref"), 50);
+            }
+        });
+
+        if (oldValues.Country !== user.Country) {
+            newMappings.forEach(m => {
+                if (m.Tag) {
+                    addTag(m.O365GroupId, user.Country, user.ADUserId);
                 }
+                removeTag(m.O365GroupId, oldValues.Country, user.ADUserId);
             });
+        }
+
+        if (user.NFP && !oldValues.NFP) {
+            await apiPost("/groups/" + config.NFPGroupId + "/members/$ref",
+                {
+                    "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + user.ADUserId
+                });
+        } else if (!user.NFP && oldValues.NFP) {
+            await apiDelete("/groups/" + config.NFPGroupId + "/members/" + user.ADUserId + "/$ref")
+        }
+
+        await saveADUser(user.ADUserId, user);
+        await saveSPUser(user.ADUserId, user, false);
 
         return true;
     }

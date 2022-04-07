@@ -90,3 +90,20 @@ code {
   font-weight: bold;
   padding: 0.35rem;
 }
+.check-button{
+  align-self: center;
+  margin-top: 0.5rem !important;
+}
+
+.note-label{
+  margin: 0.5rem;
+  align-self: center;
+}
+.warning{
+  color: red;
+  font-weight: bold;
+  padding: 0.35rem;
+}
+.page-size{
+  height: 100%;
+}

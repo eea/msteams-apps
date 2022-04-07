@@ -81,11 +81,7 @@ code {
   background-color: white;
 }
 
-.warning{
-  color: red;
-  font-weight: bold;
-  padding: 0.35rem;
-}
+
 
 .success{
   color: green;
@@ -98,11 +94,11 @@ code {
   height: 50%;
 }
 
-.note-label{
-  margin: 0.5rem;
-}
-
 .button{
   margin: 1rem 0 0 0.5rem;
   position: 'relative'
+}
+
+.small-width{
+  width: 25% !important;
 }

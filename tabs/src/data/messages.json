@@ -1,0 +1,7 @@
+{
+    "UserInvite": {
+        "UserAlreadyRegistered": "User with this email already registered.",
+        "InvalidEmail": "Invalid email. Please correct the email address!",
+        "EEAUserError": "Users with EEA email address cannot be invited as guests."
+    }
+}

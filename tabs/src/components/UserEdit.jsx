@@ -1,44 +1,96 @@
 import { React, useState, useEffect, useRef } from "react";
-import { getComboLists, getOrganisationList, getMappingsList, getMe, editUser } from "../data/provider";
+import { editUser } from "../data/provider";
+import { getComboLists, getOrganisationList, getMappingsList } from "../data/sharepointProvider";
+import { validateName, validatePhone, validateMandatoryField } from "../data/validator";
 import "./UserEdit.css";
-import { Box, TextField, Tooltip, Autocomplete, Button, FormLabel, CircularProgress, Checkbox } from "@mui/material";
+import { Box, TextField, Autocomplete, Button, FormLabel, CircularProgress, Checkbox, FormControlLabel } from "@mui/material";
+import CheckIcon from '@mui/icons-material/Check';
+import SaveIcon from '@mui/icons-material/Save';
 
-export function UserEdit({ user, refreshRow, saveFunction, newYN }) {
+export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
     const [loading, setLoading] = useState(false),
         [success, setSuccess] = useState(false),
-        [isNFP, setIsNFP] = useState(false),
-        [oldMembership, setOldMembership] = useState(user.Membership);
+        [oldValues, setOldValues] = useState(JSON.parse(JSON.stringify(user)));
 
+    const [errors, setErrors] = useState({});
     const timer = useRef();
 
     const [countries, setCountries] = useState([]),
         [memberships, setMemberships] = useState([]),
         [genders, setGenders] = useState([]),
         [organisations, setOrganisations] = useState([]),
-        [mapppings, setMappings] = useState([]);
+        [mappings, setMappings] = useState([]);
 
-    const onSubmit = async (e) => {
+    const submit = async (e) => {
         if (!loading) {
-            setSuccess(false);
-            setLoading(true);
-            if (saveFunction) {
-                await saveFunction();
-            } else {
-                let result = await editUser(user, mapppings, oldMembership);
-                if (result && refreshRow) {
-                    await refreshRow();
+            e.preventDefault();
+            let tempErrors = validateForm();
+            if (!tempErrors || !Object.values(tempErrors).some(v => { return v; })) {
+                setSuccess(false);
+                setLoading(true);
+                if (saveFunction) {
+                    await saveFunction();
+                } else {
+                    let result = await editUser(user, mappings, oldValues);
+                    if (result) {
+                        setOldValues(JSON.parse(JSON.stringify(user)));
+                        await refreshRow && refreshRow();
+                    }
                 }
+                setSuccess(true);
+                setLoading(false);
             }
-            setSuccess(true);
-            setLoading(false);
         }
-    };
+    },
+        validateField = (e) => {
+            let id = e.target.id,
+                tempErrors = { ...errors };
+
+            switch (id) {
+                case 'firstName':
+                    tempErrors.firstName = validateName(user.FirstName);
+                    break;
+                case 'lastName':
+                    tempErrors.lastName = validateName(user.LastName);
+                    break;
+                case 'phone':
+                    tempErrors.phone = validatePhone(user.Phone);
+                    break;
+                case 'country':
+                    tempErrors.country = validateMandatoryField(user.Country);
+                    break;
+                case 'membership':
+                    tempErrors.membership = validateMandatoryField(user.Membership);
+                    break;
+                case 'organisation':
+                    tempErrors.organisation = validateMandatoryField(user.OrganisationLookupId);
+                    break;
+                default:
+                    console.log('Undefined field for validation');
+                    break;
+            }
+
+            setErrors({ ...tempErrors });
+        },
+        validateForm = () => {
+            let tempErrors = { ...errors };
+            tempErrors.firstName = validateName(user.FirstName);
+            tempErrors.lastName = validateName(user.LastName);
+            tempErrors.phone = validatePhone(user.Phone);
+            tempErrors.country = validateMandatoryField(user.Country);
+            tempErrors.membership = validateMandatoryField(user.Membership);
+            tempErrors.organisation = validateMandatoryField(user.OrganisationLookupId);
+            setErrors({ ...tempErrors });
+            return tempErrors;
+        };
+
+
 
     useEffect(() => {
         (async () => {
-            let myProfile = await getMe();
-            if (myProfile.NFP) {
-                setIsNFP(true);
+
+            if (userInfo.isNFP && newYN) {
+                user.Country = userInfo.country;
             }
 
             let items = await getComboLists();
@@ -61,26 +113,28 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN }) {
             clearTimeout(timer.current);
 
         })();
-    }, []);
+    }, [userInfo, user, newYN]);
 
     return (
         <div className="welcome page main">
-            <div className="page-padding">
-                <h2>User details</h2>
+            <div >
                 <Box
                     component="form"
                     sx={{
                         '& .MuiTextField-root': { m: 1, width: '50ch' },
+
                     }}
                     autoComplete="off"
                     noValidate
+                    onSubmit={(e) => {
+                        submit(e);
+                    }}
                 >
-
                     <div className="row">
                         <Autocomplete
-
                             disablePortal
                             id="combo-box-gender"
+                            className="small-width"
                             defaultValue={
                                 {
                                     id: user.Gender,
@@ -90,29 +144,38 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN }) {
                             options={genders}
                             isOptionEqualToValue={(option, value) => option.id === value.id}
                             onChange={(e, value) => {
-                                user.Gender = value.id;
-                                user.GenderTitle = value.label;
+                                user.Gender = value ? value.id : "";
+                                user.GenderTitle = value ? value.label : "";
                             }}
-                            renderInput={(params) => <TextField {...params} label="Title" variant="standard" />}
+                            renderInput={(params) => <TextField {...params} autoComplete='off' className="small-width" label="Title" variant="standard" />}
                         />
-                        <TextField required className="control" id="firstName" label="First name" variant="standard" defaultValue={user.FirstName} onChange={e => {
-                            user.FirstName = e.target.value;
-                        }} />
-                        <TextField required className="control" id="lastName" label="Last name" variant="standard" defaultValue={user.LastName} onChange={e => {
-                            user.LastName = e.target.value;
-                        }} />
                     </div>
                     <div className="row">
-                        <TextField type="number" className="control" id="phone" label="Phone" variant="standard" defaultValue={user.Phone}
+                        <TextField required autoComplete='off' className="control" id="firstName" label="First name" variant="standard"
+                            defaultValue={user.FirstName}
                             onChange={e => {
-                                user.Phone = e.target.value;
-                            }} />
-                        <Tooltip title="Email used for creating the account." arrow>
-                            <TextField disabled required className="control" id="email" defaultValue={user.Email} label="Email" variant="standard" />
-                        </Tooltip>
+                                user.FirstName = e.target.value;
+                                validateField(e);
+                            }}
+                            inputProps={{ style: { textTransform: "capitalize" } }}
+                            error={Boolean(errors?.firstName)}
+                            helperText={(errors?.firstName)}
+                            onBlur={validateField}
+                        />
+                        <TextField required autoComplete='off' className="control" id="lastName" label="Last name" variant="standard"
+                            defaultValue={user.LastName}
+                            onChange={e => {
+                                user.LastName = e.target.value;
+                                validateField(e);
+                            }}
+                            inputProps={{ style: { textTransform: "capitalize" } }}
+                            error={Boolean(errors?.lastName)}
+                            helperText={(errors?.lastName)}
+                            onBlur={validateField}
+                        />
                         <Autocomplete
                             disablePortal
-                            id="combo-box-organisation"
+                            id="organisation"
                             defaultValue={
                                 {
                                     content: user.OrganisationLookupId,
@@ -123,31 +186,55 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN }) {
                             getOptionLabel={(option) => option.hasOwnProperty("header") ? option.header : option}
                             isOptionEqualToValue={(option, value) => option.content === value.content}
                             onChange={(e, value) => {
-                                user.OrganisationLookupId = value.content;
-                                user.Organisation = value.header;
+                                user.OrganisationLookupId = value ? value.content : undefined;
+                                user.Organisation = value ? value.header : undefined;
+                                validateField(e);
                             }}
-                            renderInput={(params) => <TextField required {...params} label="Organisation" variant="standard" />}
+                            renderInput={(params) => <TextField required {...params}
+                                label="Organisation"
+                                variant="standard"
+                                error={Boolean(errors?.organisation)}
+                                helperText={(errors?.organisation)}
+                                onBlur={validateField} />}
                         />
-                        <Autocomplete
+                    </div>
+                    <div className="row">
+                        <TextField autoComplete='off' className="control" id="phone" label="Phone" variant="standard" defaultValue={user.Phone}
+                            onChange={e => {
+                                user.Phone = e.target.value;
+                                validateField(e);
+                            }}
+                            inputProps={{ maxLength: 15 }}
+                            error={Boolean(errors?.phone)}
+                            helperText={(errors?.phone)}
+                            onBlur={validateField} />
+                        <TextField disabled required autoComplete='off' className="control" id="email" defaultValue={user.Email} label="Email" variant="standard" />
 
+                        <Autocomplete
                             disablePortal
-                            disabled={isNFP}
-                            id="combo-box-country"
+                            disabled={userInfo.isNFP || userInfo.isGuest}
+                            id="country"
                             defaultValue={user.Country}
                             options={countries}
                             onChange={(e, value) => {
                                 user.Country = value;
+                                validateField(e);
                             }}
-                            renderInput={(params) => <TextField required {...params} label="Country" variant="standard" />}
+                            renderInput={(params) => <TextField required autoComplete='off' {...params}
+                                label="Country" variant="standard"
+                                error={Boolean(errors?.country)}
+                                helperText={(errors?.country)}
+                                onBlur={validateField} />}
                         />
 
                     </div>
                     <div className="row">
+
                         <Autocomplete
                             required
                             multiple
                             limitTags={1}
-                            id="tags-membership"
+                            id="membership"
                             defaultValue={user.Membership}
                             options={memberships}
                             getOptionLabel={(option) => option}
@@ -158,11 +245,26 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN }) {
                                 <TextField
                                     {...params}
                                     required
+                                    autoComplete='off'
                                     variant="standard"
                                     label="Memberships"
+                                    error={Boolean(errors?.membership)}
+                                    helperText={(errors?.membership)}
+                                    onBlur={validateField}
                                 />
                             )}
                         />
+                        {userInfo.isAdmin && <FormControlLabel
+                            control={
+                                <Checkbox
+                                    defaultChecked={user.NFP}
+                                    onChange={(e, value) => {
+                                        user.NFP = value;
+                                    }}
+                                />
+                            }
+                            label="NFP" />}
+
                     </div>
                     <div className="row">
                         <Box sx={{ m: 1, position: 'relative' }}>
@@ -172,10 +274,12 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN }) {
                                 color="secondary"
                                 size="medium"
                                 className="button"
-                                disabled={loading}
-                                onClick={onSubmit}
+                                disabled={loading || (newYN && success)}
+
+                                endIcon={success ? <CheckIcon /> : <SaveIcon />}
                             >
                                 Save
+
                             </Button>
                             {loading && (
                                 <CircularProgress
