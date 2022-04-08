@@ -153,9 +153,9 @@ async function saveSPUser(userId, userData, newYN) {
         await apiPatch(graphURL, fields);
     }
 
-    if (userData.SuggestedOrganisation) {
+    /*if (userData.SuggestedOrganisation) {
         sendOrgSuggestionNotification(userData.SuggestedOrganisation);
-    }
+    }*/
 }
 
 
