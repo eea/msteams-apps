@@ -29,7 +29,7 @@ export function UserInvite({ userInfo }) {
         GenderTitle: "",
         Organisation: "",
         OrganisationLookupId: "",
-        NFP: false,
+        NFP: "",
         ADProfile: {}
 
     };

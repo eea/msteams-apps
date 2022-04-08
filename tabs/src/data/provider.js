@@ -97,6 +97,35 @@ async function saveADUser(userId, userData) {
     });
 }
 
+async function sendOrgSuggestionNotification(info) {
+    const config = await getConfiguration();
+    if (config.HelpdeskEmail) {
+        try {
+            await apiPost("me/sendMail",
+                {
+                    message: {
+                        subject: config.NewOrganisationSuggestionSubject,
+                        body: {
+                            contentType: "Text",
+                            content: config.NewOrganisationSuggestionMailBody + "  " + info,
+                        },
+                        toRecipients: [
+                            {
+                                emailAddress: {
+                                    address: config.HelpdeskEmail
+                                }
+                            }
+                        ]
+                    }
+                }, "user");
+        }
+        catch (err) {
+            console.log(err);
+            return false;
+        }
+    }
+}
+
 async function saveSPUser(userId, userData, newYN) {
     const spConfig = await getConfiguration();
     let fields =
@@ -112,7 +141,8 @@ async function saveSPUser(userId, userData, newYN) {
             Organisation: userData.Organisation,
             OrganisationLookupId: userData.OrganisationLookupId,
             ADUserId: userId,
-            NFP: userData.NFP
+            NFP: userData.NFP,
+            SuggestedOrganisation: userData.SuggestedOrganisation,
         }
     };
     let graphURL = "/sites/" + spConfig.SharepointSiteId + "/lists/" + spConfig.UserListId + "/items";
@@ -122,7 +152,12 @@ async function saveSPUser(userId, userData, newYN) {
         graphURL += "/" + userData.id;
         await apiPatch(graphURL, fields);
     }
+
+    if (userData.SuggestedOrganisation) {
+        sendOrgSuggestionNotification(userData.SuggestedOrganisation);
+    }
 }
+
 
 export async function sendInvitation(user, mappings) {
     try {

@@ -19,28 +19,32 @@ export async function getConfiguration() {
     }
     catch (err) {
         console.log(err);
+        return undefined;
     }
 }
 
-var organisationListItems = undefined;
-export async function getOrganisationList() {
+export async function getOrganisationList(country) {
     const config = await getConfiguration();
     try {
-        if (!organisationListItems) {
-            const response = await apiGet("/sites/" + sharepointSiteId + "/lists/" + config.OrganisationListId + "/items?$expand=fields");
-            organisationListItems = response.graphClientMessage.value.map(function (organisation) {
-                return {
-                    header: organisation.fields.Title,
-                    content: organisation.id
-                };
-            });
+        let path = "/sites/" + sharepointSiteId + "/lists/" + config.OrganisationListId + "/items?$expand=fields"
+        if (country) {
+            path += "&$filter=fields/Country eq '" + country + "' or fields/Unspecified eq 1";
         }
-        return organisationListItems;
+        const response = await apiGet(path);
+        return response.graphClientMessage.value.map(function (organisation) {
+            return {
+                header: organisation.fields.Title,
+                content: organisation.id,
+                unspecified: organisation.fields.Unspecified,
+            };
+        });
     }
     catch (err) {
         console.log(err);
+        return [];
     }
 }
+
 var mappingsList = undefined;
 export async function getMappingsList() {
     const config = await getConfiguration();
@@ -87,7 +91,7 @@ export async function getComboLists() {
         }
         var nfpColumn = columns.find(column => column.name === 'NFP');
         if (nfpColumn && nfpColumn.choice) {
-            lists.nfp = nfpColumn.choice.choices;
+            lists.nfps = nfpColumn.choice.choices;
         }
 
         return lists
@@ -118,7 +122,7 @@ export async function getSPUserByMail(email) {
 export async function getInvitedUsers(userInfo) {
     const config = await getConfiguration();
     try {
-        let path = "/sites/" + sharepointSiteId + "/lists/" + config.UserListId + "/items?$expand=fields";
+        let path = "/sites/" + sharepointSiteId + "/lists/" + config.UserListId + "/items?$expand=fields&$top=999";
         if (userInfo.isNFP) {
             path += "&$filter=fields/Country eq '" + userInfo.country + "'";
         }
@@ -127,6 +131,7 @@ export async function getInvitedUsers(userInfo) {
             organisations = await getOrganisationList();
 
         return users.value.map(function (user) {
+            var organisation = organisations.find((o) => o.content === user.fields.OrganisationLookupId);
             return {
                 Title: user.fields.Title,
                 Email: user.fields.Email,
@@ -134,13 +139,13 @@ export async function getInvitedUsers(userInfo) {
                 MembershipString: user.fields.Membership && user.fields.Membership.toString(),
                 Country: user.fields.Country,
                 OrganisationLookupId: user.fields.OrganisationLookupId,
-                //TODO: fix organisation to not give error when organisation doest not exists
-                Organisation: organisations.find((o) => o.content === user.fields.OrganisationLookupId).header,
+                Organisation: organisation ? organisation.header : "",
                 Phone: user.fields.Phone,
                 ADUserId: user.fields.ADUserId,
                 Gender: user.fields.Gender,
                 GenderTitle: user.fields.Gender ? genderList.find((g) => g.id === user.fields.Gender).label : '',
-                NFP: user.fields.NFP || false,
+                NFP: user.fields.NFP,
+                SuggestedOrganisation: user.fields.SuggestedOrganisation,
                 id: user.fields.id,
             };
         });

@@ -1,9 +1,10 @@
 import { React, useState, useEffect, } from "react";
 import { getUser, } from "../data/provider";
 import { getInvitedUsers } from "../data/sharepointProvider";
+import messages from "../data/messages.json";
 import { DataGrid } from "@mui/x-data-grid";
 import "./UserList.css";
-import { TextField, Button, Chip, Dialog, DialogTitle, IconButton, Backdrop, CircularProgress, Box } from "@mui/material";
+import { TextField, Button, Chip, Dialog, DialogTitle, IconButton, Backdrop, CircularProgress, Box, Alert, } from "@mui/material";
 import CloseIcon from '@mui/icons-material/Close';
 import CreateIcon from '@mui/icons-material/Create';
 import { UserEdit } from "./UserEdit";
@@ -13,6 +14,7 @@ export function UserList({ userInfo }) {
         [filteredUsers, setFilteredUsers] = useState([]),
         [selectedUser, setSelectedUser] = useState({}),
         [formVisible, setFormVisible] = useState(false),
+        [alertOpen, setAlertOpen] = useState(false),
         [loading, setloading] = useState(false);
 
     const renderEditButton = (params) => {
@@ -26,13 +28,18 @@ export function UserList({ userInfo }) {
                     endIcon={<CreateIcon />}
                     onClick={async () => {
                         setFormVisible(false);
-                        const user = params.row,
-                            userDetails = await getUser(user.ADUserId);
+                        const user = params.row;
+                        if (user.ADUserId) {
+                            const userDetails = await getUser(user.ADUserId);
 
-                        user.FirstName = userDetails.givenName;
-                        user.LastName = userDetails.surname;
-                        setSelectedUser(user);
-                        setFormVisible(true);
+                            user.FirstName = userDetails.givenName;
+                            user.LastName = userDetails.surname;
+                            setSelectedUser(user);
+                            setFormVisible(true);
+                        } else {
+                            setAlertOpen(true);
+
+                        }
                     }}
                 >
                     Edit
@@ -40,6 +47,13 @@ export function UserList({ userInfo }) {
             </strong>
         )
     },
+        handleAlertClose = (event, reason) => {
+            if (reason === 'clickaway') {
+                return;
+            }
+
+            setAlertOpen(false);
+        },
         renderMembershipTags = (params) => {
             let index = 0;
             return params.row.Membership && params.row.Membership.map((m) =>
@@ -54,13 +68,14 @@ export function UserList({ userInfo }) {
             }
         },
         handleClose = () => {
+            setSelectedUser({});
             setFormVisible(false);
         };
 
     const columns = [
         { field: 'Title', headerName: 'Name', flex: 1 },
         { field: 'Email', headerName: 'Email', flex: 1 },
-        { field: 'MembershipString', headerName: 'Membership', renderCell: renderMembershipTags, flex: 1 },
+        { field: 'MembershipString', headerName: 'Memberships', renderCell: renderMembershipTags, flex: 1 },
         { field: 'Country', headerName: 'Country', flex: 0.5 },
         { field: 'Organisation', headerName: 'Organisation', flex: 1 },
         {
@@ -90,6 +105,11 @@ export function UserList({ userInfo }) {
                 >
                     <CircularProgress color="inherit" />
                 </Backdrop>
+                <Dialog open={alertOpen} onClose={handleAlertClose} maxWidth='xl'>
+                    <Alert onClose={handleAlertClose} severity="error" sx={{ width: "100%" }}>
+                        {messages.UserList.MissingADUser}
+                    </Alert>
+                </Dialog>
                 <div className="search-bar">
                     <TextField id="search" label="Search" variant="standard" className="search-box" onChange={event => {
                         const { value } = event.target;
@@ -105,7 +125,7 @@ export function UserList({ userInfo }) {
                         rows={filteredUsers}
                         columns={columns}
                         pageSize={25}
-                        rowsPerPageOptions={[10, 25, 50, 100]}
+                        rowsPerPageOptions={[25]}
                         hideFooterSelectedRowCount={true}
                         getRowHeight={(params) => { return 36; }}
                     />

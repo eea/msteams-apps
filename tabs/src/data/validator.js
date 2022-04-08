@@ -15,8 +15,8 @@ export function validateName(value) {
     if (!value) {
         return mandatoryText;
     }
-    if (value.length < 3) {
-        return 'Please enter at least 3 characters!'
+    if (value.length < 2) {
+        return 'Please enter at least 2 characters!'
     }
 }
 

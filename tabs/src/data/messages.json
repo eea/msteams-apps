@@ -3,5 +3,8 @@
         "UserAlreadyRegistered": "User with this email already registered.",
         "InvalidEmail": "Invalid email. Please correct the email address!",
         "EEAUserError": "Users with EEA email address cannot be invited as guests."
+    },
+    "UserList": {
+        "MissingADUser": "The user account cannot be updated (account is not present in the Azure tenant)."
     }
 }

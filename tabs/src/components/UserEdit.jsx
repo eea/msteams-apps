@@ -3,23 +3,26 @@ import { editUser } from "../data/provider";
 import { getComboLists, getOrganisationList, getMappingsList } from "../data/sharepointProvider";
 import { validateName, validatePhone, validateMandatoryField } from "../data/validator";
 import "./UserEdit.css";
-import { Box, TextField, Autocomplete, Button, FormLabel, CircularProgress, Checkbox, FormControlLabel } from "@mui/material";
+import { Box, TextField, Autocomplete, Button, FormLabel, CircularProgress, Backdrop, Tooltip, } from "@mui/material";
 import CheckIcon from '@mui/icons-material/Check';
 import SaveIcon from '@mui/icons-material/Save';
 
 export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
     const [loading, setLoading] = useState(false),
+        [dataFetching, setDataFetching] = useState(false),
         [success, setSuccess] = useState(false),
         [oldValues, setOldValues] = useState(JSON.parse(JSON.stringify(user)));
 
     const [errors, setErrors] = useState({});
-    const timer = useRef();
 
     const [countries, setCountries] = useState([]),
         [memberships, setMemberships] = useState([]),
         [genders, setGenders] = useState([]),
         [organisations, setOrganisations] = useState([]),
+        [nfps, setNfps] = useState([]),
         [mappings, setMappings] = useState([]);
+
+    const [unspecifiedOrg, setUnspecifiedOrg] = useState(false);
 
     const submit = async (e) => {
         if (!loading) {
@@ -42,6 +45,15 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
             }
         }
     },
+        loadOrganisations = async (country) => {
+            let organisations = await getOrganisationList(user.Country);
+            if (organisations) {
+                setOrganisations(organisations);
+            }
+
+            const userOrganisation = organisations.filter(o => o.header === user.Organisation);
+            userOrganisation[0] && setUnspecifiedOrg(userOrganisation[0].unspecified);
+        },
         validateField = (e) => {
             let id = e.target.id,
                 tempErrors = { ...errors };
@@ -64,6 +76,9 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
                     break;
                 case 'organisation':
                     tempErrors.organisation = validateMandatoryField(user.OrganisationLookupId);
+                    break;
+                case 'suggestedOrganisation':
+                    tempErrors.suggestedOrganisation = validateMandatoryField(user.SuggestedOrganisation);
                     break;
                 default:
                     console.log('Undefined field for validation');
@@ -88,7 +103,7 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
 
     useEffect(() => {
         (async () => {
-
+            setDataFetching(true);
             if (userInfo.isNFP && newYN) {
                 user.Country = userInfo.country;
             }
@@ -98,26 +113,28 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
                 setCountries(items.countries);
                 setMemberships(items.memberships);
                 setGenders(items.genders);
+                setNfps(items.nfps);
             }
-
-            let organisations = await getOrganisationList();
-            if (organisations) {
-                setOrganisations(organisations);
-            }
+            loadOrganisations(user.Country);
 
             let mapppings = await getMappingsList();
             if (mapppings) {
                 setMappings(mapppings);
             }
 
-            clearTimeout(timer.current);
-
+            setDataFetching(false);
         })();
     }, [userInfo, user, newYN]);
 
     return (
         <div className="welcome page main">
             <div >
+                <Backdrop
+                    sx={{ color: '#6b32a8', zIndex: (theme) => theme.zIndex.drawer + 1 }}
+                    open={dataFetching}
+                >
+                    <CircularProgress color="inherit" />
+                </Backdrop>
                 <Box
                     component="form"
                     sx={{
@@ -175,28 +192,24 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
                         />
                         <Autocomplete
                             disablePortal
-                            id="organisation"
-                            defaultValue={
-                                {
-                                    content: user.OrganisationLookupId,
-                                    header: user.Organisation
-                                }
-                            }
-                            options={organisations}
-                            getOptionLabel={(option) => option.hasOwnProperty("header") ? option.header : option}
-                            isOptionEqualToValue={(option, value) => option.content === value.content}
+                            disabled={userInfo.isNFP || userInfo.isGuest}
+                            id="country"
+                            defaultValue={user.Country}
+                            options={countries}
                             onChange={(e, value) => {
-                                user.OrganisationLookupId = value ? value.content : undefined;
-                                user.Organisation = value ? value.header : undefined;
+                                user.Country = value;
+                                loadOrganisations(user.Country);
+                                user.OrganisationLookupId = null;
+                                user.Organisation = "";
                                 validateField(e);
                             }}
-                            renderInput={(params) => <TextField required {...params}
-                                label="Organisation"
-                                variant="standard"
-                                error={Boolean(errors?.organisation)}
-                                helperText={(errors?.organisation)}
+                            renderInput={(params) => <TextField required autoComplete='off' {...params}
+                                label="Country" variant="standard"
+                                error={Boolean(errors?.country)}
+                                helperText={(errors?.country)}
                                 onBlur={validateField} />}
                         />
+
                     </div>
                     <div className="row">
                         <TextField autoComplete='off' className="control" id="phone" label="Phone" variant="standard" defaultValue={user.Phone}
@@ -212,18 +225,31 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
 
                         <Autocomplete
                             disablePortal
-                            disabled={userInfo.isNFP || userInfo.isGuest}
-                            id="country"
-                            defaultValue={user.Country}
-                            options={countries}
+                            id="organisation"
+                            defaultValue={
+                                {
+                                    content: user.OrganisationLookupId,
+                                    header: user.Organisation,
+                                    unspecified: false,
+                                }
+                            }
+                            options={organisations}
+                            getOptionLabel={(option) => option.hasOwnProperty("header") ? option.header : option}
+                            isOptionEqualToValue={(option, value) => option.content === value.content}
                             onChange={(e, value) => {
-                                user.Country = value;
+                                user.OrganisationLookupId = value ? value.content : undefined;
+                                user.Organisation = value ? value.header : undefined;
+                                setUnspecifiedOrg(value.unspecified);
+                                if (!unspecifiedOrg) {
+                                    user.SuggestedOrganisation = null;
+                                }
                                 validateField(e);
                             }}
-                            renderInput={(params) => <TextField required autoComplete='off' {...params}
-                                label="Country" variant="standard"
-                                error={Boolean(errors?.country)}
-                                helperText={(errors?.country)}
+                            renderInput={(params) => <TextField required {...params}
+                                label="Organisation"
+                                variant="standard"
+                                error={Boolean(errors?.organisation)}
+                                helperText={(errors?.organisation)}
                                 onBlur={validateField} />}
                         />
 
@@ -254,17 +280,33 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
                                 />
                             )}
                         />
-                        {userInfo.isAdmin && <FormControlLabel
-                            control={
-                                <Checkbox
-                                    defaultChecked={user.NFP}
-                                    onChange={(e, value) => {
-                                        user.NFP = value;
-                                    }}
-                                />
-                            }
-                            label="NFP" />}
+                        {userInfo.isAdmin && <Autocomplete
+                            disablePortal
+                            id="nfp"
+                            defaultValue={user.NFP}
+                            options={nfps}
+                            onChange={(e, value) => {
+                                user.NFP = value;
+                            }}
+                            renderInput={(params) => <TextField required autoComplete='off' {...params} label="NFP" variant="standard" />}
+                        />}
 
+                    </div>
+                    <div className="row">
+                        {unspecifiedOrg &&
+                            <TextField required autoComplete='off' className="control" id="suggestedOrganisation" label="Suggest new organisation" variant="standard"
+                                multiline
+                                rows={4}
+                                placeholder="Please enter Name and URL of the organisation to add. We will then add the Organisation to the list and update the User information."
+                                defaultValue={user.SuggestedOrganisation}
+                                onChange={e => {
+                                    user.SuggestedOrganisation = e.target.value;
+                                    validateField(e);
+                                }}
+                                error={Boolean(errors?.suggestedOrganisation)}
+                                helperText={(errors?.suggestedOrganisation)}
+                                onBlur={validateField}
+                            />}
                     </div>
                     <div className="row">
                         <Box sx={{ m: 1, position: 'relative' }}>
@@ -300,7 +342,9 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
                         <FormLabel className="note-label">Note: If the email needs to be changed, kindly contact Eionet Helpdesk. </FormLabel>
                     </div>}
                 </Box>
+
             </div >
         </div >
+
     );
 }
