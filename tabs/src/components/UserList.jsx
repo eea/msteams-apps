@@ -60,6 +60,12 @@ export function UserList({ userInfo }) {
                 <Chip key={index++} label={m} />
             )
         },
+        renderOtherMembershipsTags = (params) => {
+            let index = 0;
+            return params.row.OtherMemberships && params.row.OtherMemberships.map((m) =>
+                <Chip key={index++} label={m} />
+            )
+        },
         refreshRow = async () => {
             let invitedUsers = await getInvitedUsers(userInfo);
             if (invitedUsers) {
@@ -75,8 +81,10 @@ export function UserList({ userInfo }) {
     const columns = [
         { field: 'Title', headerName: 'Name', flex: 1 },
         { field: 'Email', headerName: 'Email', flex: 1 },
-        { field: 'MembershipString', headerName: 'Memberships', renderCell: renderMembershipTags, flex: 1 },
+        { field: 'MembershipString', headerName: 'Eionet groups', renderCell: renderMembershipTags, flex: 1 },
+        { field: 'OtherMembershipsString', headerName: 'Other memberships', renderCell: renderOtherMembershipsTags, flex: 1 },
         { field: 'Country', headerName: 'Country', flex: 0.5 },
+        { field: 'NFP', headerName: 'NFP', flex: 0.5 },
         { field: 'Organisation', headerName: 'Organisation', flex: 1 },
         {
             field: 'Edit', headerName: '', width: 150, renderCell: renderEditButton, disableClickEventBubbling: true,

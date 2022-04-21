@@ -2,8 +2,7 @@
     {
         "resource": "Microsoft Graph",
         "delegated": [
-            "User.Read",
-            "Mail.Send"
+            "User.Read"
         ],
         "application": [
             "User.Read.All",
@@ -11,7 +10,8 @@
             "Domain.ReadWrite.All",
             "Directory.ReadWrite.All",
             "TeamMember.ReadWrite.All",
-            "TeamSettings.ReadWrite.All"
+            "TeamSettings.ReadWrite.All",
+            "Mail.Send"
         ]
     }
 ]

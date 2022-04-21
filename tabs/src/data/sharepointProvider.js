@@ -1,5 +1,5 @@
 
-import { apiGet } from './apiProvider';
+import { apiGet, apiPost } from './apiProvider';
 
 const sharepointSiteId = "7lcpdm.sharepoint.com,bf9359de-0f13-4b00-8b5a-114f6ef3bfb0,6609a994-5225-4a1d-bd05-a239c7b45f72",
     configurationListId = "010b1be2-0df5-4ab1-b2a7-17e010aae775";
@@ -89,6 +89,10 @@ export async function getComboLists() {
         if (membershipColumn && membershipColumn.choice) {
             lists.memberships = membershipColumn.choice.choices;
         }
+        var otherMembershipColumn = columns.find(column => column.name === 'OtherMemberships');
+        if (otherMembershipColumn && otherMembershipColumn.choice) {
+            lists.otherMemberships = otherMembershipColumn.choice.choices;
+        }
         var nfpColumn = columns.find(column => column.name === 'NFP');
         if (nfpColumn && nfpColumn.choice) {
             lists.nfps = nfpColumn.choice.choices;
@@ -137,6 +141,8 @@ export async function getInvitedUsers(userInfo) {
                 Email: user.fields.Email,
                 Membership: user.fields.Membership,
                 MembershipString: user.fields.Membership && user.fields.Membership.toString(),
+                OtherMemberships: user.fields.OtherMemberships,
+                OtherMembershipsString: user.fields.OtherMemberships && user.fields.OtherMemberships.toString(),
                 Country: user.fields.Country,
                 OrganisationLookupId: user.fields.OrganisationLookupId,
                 Organisation: organisation ? organisation.header : "",
@@ -154,3 +160,19 @@ export async function getInvitedUsers(userInfo) {
         console.log(err);
     }
 }
+
+/*async function logEvent(logInfo, userId) {
+    const spConfig = await getConfiguration();
+    let fields =
+    {
+        fields: {
+            Message: logInfo.Message,
+            FullMessage: logInfo.FullMessage,
+            UserId: userId,
+            Timestamp: 
+        }
+    };
+
+    let graphURL = "/sites/" + spConfig.SharepointSiteId + "/lists/" + spConfig.LoggingListId + "/items";
+    await apiPost(graphURL, fields);
+}*/

@@ -88,10 +88,14 @@ async function removeTag(teamId, name, userId) {
 }
 
 async function saveADUser(userId, userData) {
+    let displayName = userData.FirstName + ' ' + userData.LastName + ' (' + userData.Country + ')';
+    if (userData.NFP) {
+        displayName = userData.FirstName + ' ' + userData.LastName + ' (NFP-' + userData.Country + ')';
+    }
     await apiPatch("/users/" + userId, {
         givenName: userData.FirstName,
         surname: userData.LastName,
-        displayName: userData.FirstName + ' ' + userData.LastName + ' (' + userData.Country + ')',
+        displayName: displayName,
         department: 'Eionet',
         country: userData.Country
     });
@@ -101,7 +105,7 @@ async function sendOrgSuggestionNotification(info) {
     const config = await getConfiguration();
     if (config.HelpdeskEmail) {
         try {
-            await apiPost("me/sendMail",
+            await apiPost("users/" + config.FromEmailAddress + "/sendMail",
                 {
                     message: {
                         subject: config.NewOrganisationSuggestionSubject,
@@ -116,8 +120,9 @@ async function sendOrgSuggestionNotification(info) {
                                 }
                             }
                         ]
-                    }
-                }, "user");
+                    },
+                    saveToSentItems: true
+                });
         }
         catch (err) {
             console.log(err);
@@ -134,8 +139,14 @@ async function saveSPUser(userId, userData, newYN) {
             Phone: userData.Phone,
             Email: userData.Email,
             Country: userData.Country,
-            "Membership@odata.type": "Collection(Edm.String)",
-            Membership: userData.Membership,
+            ...userData.Membership && {
+                "Membership@odata.type": "Collection(Edm.String)",
+                Membership: userData.Membership
+            },
+            ...userData.OtherMemberships && {
+                "OtherMemberships@odata.type": "Collection(Edm.String)",
+                OtherMemberships: userData.OtherMemberships,
+            },
             Title: userData.FirstName + ' ' + userData.LastName,
             Gender: userData.Gender,
             Organisation: userData.Organisation,
@@ -145,6 +156,7 @@ async function saveSPUser(userId, userData, newYN) {
             SuggestedOrganisation: userData.SuggestedOrganisation,
         }
     };
+
     let graphURL = "/sites/" + spConfig.SharepointSiteId + "/lists/" + spConfig.UserListId + "/items";
     if (newYN) {
         await apiPost(graphURL, fields);
@@ -153,20 +165,23 @@ async function saveSPUser(userId, userData, newYN) {
         await apiPatch(graphURL, fields);
     }
 
-    /*if (userData.SuggestedOrganisation) {
+    if (userData.SuggestedOrganisation) {
         sendOrgSuggestionNotification(userData.SuggestedOrganisation);
-    }*/
+    }
 }
-
 
 export async function sendInvitation(user, mappings) {
     try {
-        const firstMapping = mappings.find(m => user.Membership.includes(m.Membership)),
+        let firstMapping = mappings.find(m => (user.Membership && user.Membership.includes(m.Membership)) || (user.OtherMemberships && user.OtherMemberships.includes(m.Membership))),
             config = await getConfiguration();
         let userId = undefined,
             invitationResponse = undefined,
             sendMail = false,
             teamsURLs = "\n";
+
+        if (user.NFP && !firstMapping) {
+            firstMapping = mappings.find(m => m.O365GroupId === config.MainEionetGroupId);
+        }
 
         if (!user.ADProfile) {
             try {
@@ -196,17 +211,23 @@ export async function sendInvitation(user, mappings) {
 
         if (userId) {
             try {
-                //If NFP save to NFPs groups
+                let groupList = [];
+                //If NFP save to NFPs groups and Main EIONET group
                 if (user.NFP) {
                     await apiPost("/groups/" + config.NFPGroupId + "/members/$ref",
                         {
                             "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + userId
                         });
+
+                    groupList.push(config.MainEionetGroupId);
+                    await apiPost("/groups/" + config.MainEionetGroupId + "/members/$ref",
+                        {
+                            "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + userId
+                        });
+
                 }
 
-                let groupList = [];
-                mappings.filter(m => user.Membership.includes(m.Membership)).forEach(async (mapping) => {
-
+                mappings.filter(m => (user.Membership && user.Membership.includes(m.Membership)) || (user.OtherMemberships && user.OtherMemberships.includes(m.Membership))).forEach(async (mapping) => {
                     //Set groups and tags
                     if (!groupList.includes(mapping.O365GroupId)) {
                         teamsURLs = teamsURLs + mapping.TeamURL + "\n";
@@ -226,7 +247,7 @@ export async function sendInvitation(user, mappings) {
 
                 if (sendMail) {
                     try {
-                        await apiPost("me/sendMail",
+                        await apiPost("users/" + config.FromEmailAddress + "/sendMail",
                             {
                                 message: {
                                     subject: config.AddedToTeamsMailSubject,
@@ -241,8 +262,9 @@ export async function sendInvitation(user, mappings) {
                                             }
                                         }
                                     ]
-                                }
-                            }, "user");
+                                },
+                                saveToSentItems: true
+                            });
                     }
                     catch (err) {
                         console.log(err);
@@ -269,8 +291,8 @@ export async function sendInvitation(user, mappings) {
 
 export async function editUser(user, mappings, oldValues) {
     try {
-        let newMappings = mappings.filter(m => user.Membership.includes(m.Membership)),
-            oldMappings = mappings.filter(m => oldValues.Membership.includes(m.Membership)),
+        let newMappings = mappings.filter(m => (user.Membership && user.Membership.includes(m.Membership)) || (user.OtherMemberships && user.OtherMemberships.includes(m.Membership))),
+            oldMappings = mappings.filter(m => (oldValues.Membership && oldValues.Membership.includes(m.Membership)) || (oldValues.OtherMemberships && oldValues.OtherMemberships.includes(m.Membership))),
             newGroups = [...new Set(newMappings.map(m => m.O365GroupId))],
             oldGroups = [...new Set(oldMappings.map(m => m.O365GroupId))],
             newTags = [...new Set(newMappings.filter(m => m.Tag))],
@@ -322,8 +344,18 @@ export async function editUser(user, mappings, oldValues) {
                 {
                     "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + user.ADUserId
                 });
+
+            if (!newGroups.includes(config.MainEionetGroupId)) {
+                await apiPost("/groups/" + config.MainEionetGroupId + "/members/$ref",
+                    {
+                        "@odata.id": "https://graph.microsoft.com/beta/directoryObjects/" + user.ADUserId
+                    });
+            }
         } else if (!user.NFP && oldValues.NFP) {
             await apiDelete("/groups/" + config.NFPGroupId + "/members/" + user.ADUserId + "/$ref")
+            if (!newGroups.includes(config.MainEionetGroupId)) {
+                await apiDelete("/groups/" + config.MainEionetGroupId + "/members/" + user.ADUserId + "/$ref");
+            }
         }
 
         await saveADUser(user.ADUserId, user);

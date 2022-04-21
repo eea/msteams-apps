@@ -23,6 +23,7 @@ export function UserInvite({ userInfo }) {
         Email: "",
         Country: "",
         Membership: [],
+        OtherMemberships: [],
         FirstName: "",
         LastName: "",
         Gender: "",

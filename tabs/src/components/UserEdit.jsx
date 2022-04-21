@@ -1,9 +1,10 @@
-import { React, useState, useEffect, useRef } from "react";
+import { React, useState, useEffect } from "react";
 import { editUser } from "../data/provider";
 import { getComboLists, getOrganisationList, getMappingsList } from "../data/sharepointProvider";
 import { validateName, validatePhone, validateMandatoryField } from "../data/validator";
 import "./UserEdit.css";
-import { Box, TextField, Autocomplete, Button, FormLabel, CircularProgress, Backdrop, Tooltip, } from "@mui/material";
+import messages from "../data/messages.json";
+import { Box, TextField, Autocomplete, Button, FormLabel, CircularProgress, Backdrop, } from "@mui/material";
 import CheckIcon from '@mui/icons-material/Check';
 import SaveIcon from '@mui/icons-material/Save';
 
@@ -11,12 +12,15 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
     const [loading, setLoading] = useState(false),
         [dataFetching, setDataFetching] = useState(false),
         [success, setSuccess] = useState(false),
-        [oldValues, setOldValues] = useState(JSON.parse(JSON.stringify(user)));
+        [oldValues, setOldValues] = useState(JSON.parse(JSON.stringify(user))),
+        [warningVisible, setWarningVisible] = useState(false),
+        [warningText, setWarningText] = useState("");
 
     const [errors, setErrors] = useState({});
 
     const [countries, setCountries] = useState([]),
         [memberships, setMemberships] = useState([]),
+        [otherMemberships, setOtherMemberships] = useState([]),
         [genders, setGenders] = useState([]),
         [organisations, setOrganisations] = useState([]),
         [nfps, setNfps] = useState([]),
@@ -28,7 +32,8 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
         if (!loading) {
             e.preventDefault();
             let tempErrors = validateForm();
-            if (!tempErrors || !Object.values(tempErrors).some(v => { return v; })) {
+            setWarningVisible(false);
+            if ((!tempErrors || !Object.values(tempErrors).some(v => { return v; })) && validateMembership()) {
                 setSuccess(false);
                 setLoading(true);
                 if (saveFunction) {
@@ -54,6 +59,19 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
             const userOrganisation = organisations.filter(o => o.header === user.Organisation);
             userOrganisation[0] && setUnspecifiedOrg(userOrganisation[0].unspecified);
         },
+        validateMembership = () => {
+            const validMembership = user.Membership && user.Membership.length > 0,
+                validOtherMemberships = user.OtherMemberships && user.OtherMemberships.length > 0;
+            if (!validMembership && !validOtherMemberships && !user.NFP) {
+                setWarningVisible(true);
+                setWarningText(messages.UserEdit.MissingMembership);
+                return false;
+            } else {
+                setWarningVisible(false);
+                setWarningText("");
+                return true;
+            }
+        },
         validateField = (e) => {
             let id = e.target.id,
                 tempErrors = { ...errors };
@@ -70,9 +88,6 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
                     break;
                 case 'country':
                     tempErrors.country = validateMandatoryField(user.Country);
-                    break;
-                case 'membership':
-                    tempErrors.membership = validateMandatoryField(user.Membership);
                     break;
                 case 'organisation':
                     tempErrors.organisation = validateMandatoryField(user.OrganisationLookupId);
@@ -93,12 +108,13 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
             tempErrors.lastName = validateName(user.LastName);
             tempErrors.phone = validatePhone(user.Phone);
             tempErrors.country = validateMandatoryField(user.Country);
-            tempErrors.membership = validateMandatoryField(user.Membership);
             tempErrors.organisation = validateMandatoryField(user.OrganisationLookupId);
+            if (unspecifiedOrg) {
+                tempErrors.suggestedOrganisation = validateMandatoryField(user.SuggestedOrganisation);
+            }
             setErrors({ ...tempErrors });
             return tempErrors;
         };
-
 
 
     useEffect(() => {
@@ -112,6 +128,7 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
             if (items) {
                 setCountries(items.countries);
                 setMemberships(items.memberships);
+                setOtherMemberships(items.otherMemberships);
                 setGenders(items.genders);
                 setNfps(items.nfps);
             }
@@ -273,13 +290,31 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
                                     required
                                     autoComplete='off'
                                     variant="standard"
-                                    label="Memberships"
-                                    error={Boolean(errors?.membership)}
-                                    helperText={(errors?.membership)}
-                                    onBlur={validateField}
+                                    label="Eionet groups"
                                 />
                             )}
                         />
+                        {userInfo.isAdmin && <Autocomplete
+                            required
+                            multiple
+                            limitTags={1}
+                            id="otherMembership"
+                            defaultValue={user.OtherMemberships}
+                            options={otherMemberships}
+                            getOptionLabel={(option) => option}
+                            onChange={(e, value) => {
+                                user.OtherMemberships = value;
+                            }}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    required
+                                    autoComplete='off'
+                                    variant="standard"
+                                    label="Other memberships"
+                                />
+                            )}
+                        />}
                         {userInfo.isAdmin && <Autocomplete
                             disablePortal
                             id="nfp"
@@ -336,7 +371,7 @@ export function UserEdit({ user, refreshRow, saveFunction, newYN, userInfo }) {
                                 />
                             )}
                         </Box>
-
+                        {warningVisible && <FormLabel className="note-label warning" error>{warningText}</FormLabel>}
                     </div>
                     {!newYN && <div className="row">
                         <FormLabel className="note-label">Note: If the email needs to be changed, kindly contact Eionet Helpdesk. </FormLabel>

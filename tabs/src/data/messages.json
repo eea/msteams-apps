@@ -6,5 +6,8 @@
     },
     "UserList": {
         "MissingADUser": "The user account cannot be updated (account is not present in the Azure tenant)."
+    },
+    "UserEdit": {
+        "MissingMembership": "At least one the following fields must be selected Eionet groups, Other memberships or NFP."
     }
 }
